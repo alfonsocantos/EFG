@@ -1,7 +1,8 @@
 GO ?= go
 ARGS ?=
+MONGO_TEST_URI ?= mongodb://localhost:27017
 
-.PHONY: run test build
+.PHONY: run test build test-integration test-load
 
 run:
 	docker compose up -d --wait mongo
@@ -9,6 +10,14 @@ run:
 
 test:
 	$(GO) test ./...
+
+test-integration:
+	docker compose up -d --wait mongo
+	MONGO_TEST_URI="$(MONGO_TEST_URI)" $(GO) test ./presence -run Mongo -count=1
+
+test-load:
+	docker compose up -d --wait mongo
+	MONGO_TEST_URI="$(MONGO_TEST_URI)" $(GO) test ./presence -run '^$$' -bench '^BenchmarkEvents$$' -benchtime=5s -cpu=8
 
 build:
 	mkdir -p bin

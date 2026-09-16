@@ -3,6 +3,7 @@ module efg
 go 1.25.6
 
 require (
+	github.com/fulldump/biff v1.3.0
 	github.com/fulldump/box v0.7.0
 	github.com/fulldump/goconfig v1.9.0
 	go.mongodb.org/mongo-driver/v2 v2.9.1
