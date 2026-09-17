@@ -4,6 +4,7 @@ import (
 	"context"
 	"efg/mongoclient"
 	"efg/presence"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -31,6 +32,9 @@ func New(client *mongo.Client) *box.B {
 		return map[string]string{"status": "ok"}
 	})
 	b.Handle(http.MethodPost, "/events", presence.Events)
+	b.Handle(http.MethodPut, "/me/status", presence.SetStatus)
+	b.Handle(http.MethodGet, "/me/status", presence.GetStatus)
+	b.Handle(http.MethodGet, "/me/friends/presence", presence.FriendsPresence)
 
 	return b
 }
@@ -46,11 +50,20 @@ func handleErrors(next box.H) box.H {
 			return
 		}
 
-		// todo handle different errors
-		if errors.Is(err, presence.ErrInvalidEvents) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		if errors.Is(err, presence.ErrMissingPlayerID) {
+			http.Error(box.GetResponse(ctx), err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var syntax *json.SyntaxError
+		var mismatch *json.UnmarshalTypeError
+		if errors.Is(err, presence.ErrInvalidEvents) || errors.Is(err, presence.ErrInvalidStatus) ||
+			errors.As(err, &syntax) || errors.As(err, &mismatch) ||
+			errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			http.Error(box.GetResponse(ctx), err.Error(), http.StatusBadRequest)
 			return
 		}
+
 		log.Printf("API error: %v", err)
 		http.Error(box.GetResponse(ctx), "Internal server error", http.StatusInternalServerError)
 	}

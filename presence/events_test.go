@@ -26,11 +26,10 @@ import (
 
 func TestInvalidEvents(t *testing.T) {
 	for _, body := range []string{
-		`{`, `null`, `{}`, `{"server_id":"s","server_session":"b","events":[]}`,
-		`{"server_id":"s","server_session":"b","events":[{"player_id":"p","state":"online","occurred_at_ms":1}]}`,
-		`{"server_id":"s","server_session":"b","events":[{"assignment_id":"a","state":"online","occurred_at_ms":1}]}`,
-		`{"server_id":"s","server_session":"b","events":[{"player_id":"p","assignment_id":"a","state":"online","occurred_at_ms":0}]}`,
-		`{"server_id":"s","server_session":"b","events":[{"player_id":"p","assignment_id":"a","state":"online","occurred_at_ms":1},{"player_id":"q","assignment_id":"a","state":"away","occurred_at_ms":0}]}`,
+		`{`, `null`, `{}`, `{"server_id":"s","events":[]}`,
+		`{"server_id":"s","events":[{"state":"online","occurred_at_ms":1}]}`,
+		`{"server_id":"s","events":[{"player_id":"p","state":"online","occurred_at_ms":0}]}`,
+		`{"server_id":"s","events":[{"player_id":"p","state":"online","occurred_at_ms":1},{"player_id":"q","state":"away","occurred_at_ms":0}]}`,
 	} {
 		t.Run(body, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
@@ -49,7 +48,7 @@ func TestEventsDatabaseError(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	body := `{"server_id":"s","server_session":"b","events":[{"player_id":"p","assignment_id":"a","state":"online","occurred_at_ms":1}]}`
+	body := `{"server_id":"s","events":[{"player_id":"p","state":"online","occurred_at_ms":1}]}`
 	api.New(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body)))
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body)
@@ -131,31 +130,30 @@ func assertPlayerFields(t *testing.T, players *mongo.Collection, id string, want
 
 func TestEventsMongo(t *testing.T) {
 	server, players, prefix := fixture(t)
-	wantServer, wantSession, wantAssignment := "", "", ""
+	wantServer, wantGame := "", ""
 	var newestTimestamp int64
 	for _, step := range []struct {
-		name, server, session, assignment, state string
-		timestamp                                int64
-		wantState                                string
-		wantTimestamp                            int64
+		name, server, game, state string
+		timestamp                 int64
+		wantState                 string
+		wantTimestamp             int64
 	}{
-		{"online", "server", "session", "assignment", "online", 100, "online", 100},
-		{"ingame", "server", "session", "assignment", "ingame", 300, "ingame", 300},
-		{"older", "server", "session", "assignment", "offline", 200, "ingame", 300},
-		{"equal", "server", "session", "assignment", "offline", 300, "ingame", 300},
-		{"new server", "other", "session", "assignment", "ingame", 400, "ingame", 400},
-		{"new session", "other", "new-session", "assignment", "ingame", 500, "ingame", 500},
-		{"new assignment", "other", "new-session", "$new-assignment", "ingame", 600, "ingame", 600},
-		{"stale metadata", "old-server", "old-session", "old-assignment", "offline", 550, "ingame", 600},
-		{"equal metadata", "old-server", "old-session", "old-assignment", "offline", 600, "ingame", 600},
-		{"offline", "other", "new-session", "$new-assignment", "offline", 700, "offline", 700},
-		{"custom state", "other", "new-session", "$new-assignment", "away", 710, "away", 710},
-		{"future state", "other", "new-session", "$new-assignment", "$client-defined-state", 720, "$client-defined-state", 720},
-		{"stale custom state", "other", "new-session", "$new-assignment", "spectating", 715, "$client-defined-state", 720},
+		{"online", "server", "CSGO", "online", 100, "online", 100},
+		{"ingame", "server", "CSGO", "ingame", 300, "ingame", 300},
+		{"older", "server", "CSGO", "offline", 200, "ingame", 300},
+		{"equal", "server", "CSGO", "offline", 300, "ingame", 300},
+		{"new server", "other", "CSGO", "ingame", 400, "ingame", 400},
+		{"new game", "other", "$new-game", "ingame", 600, "ingame", 600},
+		{"stale metadata", "old-server", "old-game", "offline", 550, "ingame", 600},
+		{"equal metadata", "old-server", "old-game", "offline", 600, "ingame", 600},
+		{"offline", "other", "$new-game", "offline", 700, "offline", 700},
+		{"custom state", "other", "$new-game", "away", 710, "away", 710},
+		{"future state", "other", "$new-game", "$client-defined-state", 720, "$client-defined-state", 720},
+		{"stale custom state", "other", "$new-game", "spectating", 715, "$client-defined-state", 720},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			batch := presence.EventsRequest{ServerID: step.server, ServerSession: step.session, Events: []presence.Event{{
-				PlayerID: prefix, AssignmentID: step.assignment, State: step.state, OccurredAtMS: step.timestamp,
+			batch := presence.EventsRequest{ServerID: step.server, Events: []presence.Event{{
+				PlayerID: prefix, State: step.state, Game: step.game, OccurredAtMS: step.timestamp,
 			}}}
 			if err := send(server, batch); err != nil {
 				t.Fatal(err)
@@ -163,21 +161,21 @@ func TestEventsMongo(t *testing.T) {
 			if step.timestamp > newestTimestamp {
 				newestTimestamp = step.timestamp
 				wantServer = step.server
-				wantSession = step.session
-				wantAssignment = step.assignment
+				wantGame = step.game
 			}
 			assertPlayerFields(t, players, prefix, bson.M{
 				"state": step.wantState, "last_event_ms": step.wantTimestamp,
-				"server_id": wantServer, "server_session": wantSession, "assignment_id": wantAssignment,
+				"server_id": wantServer,
+				"game":      wantGame,
 			})
 		})
 	}
 
-	batch := presence.EventsRequest{ServerID: "server", ServerSession: "session", Events: []presence.Event{
-		{PlayerID: prefix, AssignmentID: "assignment", State: "ingame", OccurredAtMS: 800},
-		{PlayerID: prefix, AssignmentID: "assignment", State: "online", OccurredAtMS: 750},
-		{PlayerID: prefix + "-other", AssignmentID: "assignment", State: "online", OccurredAtMS: 100},
-		{PlayerID: prefix + "-unknown", AssignmentID: "assignment", State: "online", OccurredAtMS: 100},
+	batch := presence.EventsRequest{ServerID: "server", Events: []presence.Event{
+		{PlayerID: prefix, State: "ingame", OccurredAtMS: 800},
+		{PlayerID: prefix, State: "online", OccurredAtMS: 750},
+		{PlayerID: prefix + "-other", State: "online", OccurredAtMS: 100},
+		{PlayerID: prefix + "-unknown", State: "online", OccurredAtMS: 100},
 	}}
 	if err := send(server, batch); err != nil {
 		t.Fatal(err)
@@ -199,15 +197,15 @@ func TestExistingPlayerFieldsMongo(t *testing.T) {
 	if _, err := players.InsertOne(ctx, bson.M{"_id": prefix, "nickname": "Alice"}); err != nil {
 		t.Fatal(err)
 	}
-	batch := presence.EventsRequest{ServerID: "$server", ServerSession: "$session", Events: []presence.Event{{
-		PlayerID: prefix, AssignmentID: "$assignment", State: "online", OccurredAtMS: 100,
+	batch := presence.EventsRequest{ServerID: "$server", Events: []presence.Event{{
+		PlayerID: prefix, State: "online", OccurredAtMS: 100,
 	}}}
 	if err := send(server, batch); err != nil {
 		t.Fatal(err)
 	}
 	assertPlayerFields(t, players, prefix, bson.M{
 		"nickname": "Alice", "last_event_ms": int64(100),
-		"server_id": "$server", "server_session": "$session", "assignment_id": "$assignment",
+		"server_id": "$server",
 	})
 }
 
@@ -216,8 +214,8 @@ func TestConcurrentEventsMongo(t *testing.T) {
 	var group sync.WaitGroup
 	for i := 1; i <= 50; i++ {
 		group.Go(func() {
-			batch := presence.EventsRequest{ServerID: fmt.Sprint(i), ServerSession: fmt.Sprint(i), Events: []presence.Event{{
-				PlayerID: prefix, AssignmentID: fmt.Sprint(i), State: "ingame", OccurredAtMS: int64(i),
+			batch := presence.EventsRequest{ServerID: fmt.Sprint(i), Events: []presence.Event{{
+				PlayerID: prefix, State: "ingame", OccurredAtMS: int64(i),
 			}}}
 			if err := send(server, batch); err != nil {
 				t.Error(err)
@@ -226,7 +224,7 @@ func TestConcurrentEventsMongo(t *testing.T) {
 	}
 	group.Wait()
 	assertPlayerFields(t, players, prefix, bson.M{
-		"last_event_ms": int64(50), "server_id": "50", "server_session": "50", "assignment_id": "50",
+		"last_event_ms": int64(50), "server_id": "50",
 	})
 }
 
@@ -237,8 +235,8 @@ func BenchmarkEvents(b *testing.B) {
 		for player := 0; player < 10; player++ {
 			documents = append(documents, bson.M{
 				"_id":       fmt.Sprintf("%s-%d-%d", prefix, match, player),
-				"server_id": prefix, "server_session": "load", "assignment_id": fmt.Sprint(match),
-				"state": "offline", "last_event_ms": int64(0),
+				"server_id": prefix,
+				"state":     "offline", "last_event_ms": int64(0),
 			})
 		}
 	}
@@ -252,11 +250,11 @@ func BenchmarkEvents(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			n := sequence.Add(1)
-			batch := presence.EventsRequest{ServerID: prefix, ServerSession: "load", Events: make([]presence.Event, 10)}
+			batch := presence.EventsRequest{ServerID: prefix, Events: make([]presence.Event, 10)}
 			for i := range batch.Events {
 				batch.Events[i] = presence.Event{
-					PlayerID:     fmt.Sprintf("%s-%d-%d", prefix, n%100, i),
-					AssignmentID: fmt.Sprint(n % 100), State: "ingame", OccurredAtMS: n,
+					PlayerID: fmt.Sprintf("%s-%d-%d", prefix, n%100, i),
+					State:    "ingame", OccurredAtMS: n,
 				}
 			}
 			if err := send(server, batch); err != nil {

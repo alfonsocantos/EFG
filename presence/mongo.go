@@ -7,14 +7,13 @@ import (
 
 // playerUpsert inserts a new player or updates an existing one if the event is newer.
 // MongoDB evaluates the comparison and the update atomically for each player.
-func playerUpsert(serverID, serverSession string, event Event) *mongo.UpdateOneModel {
+func playerUpsert(serverID string, event Event) *mongo.UpdateOneModel {
 	fields := bson.M{
-		"player_id":      event.PlayerID,
-		"server_id":      serverID,
-		"server_session": serverSession,
-		"assignment_id":  event.AssignmentID,
-		"state":          event.State,
-		"last_event_ms":  event.OccurredAtMS,
+		"player_id":     event.PlayerID,
+		"server_id":     serverID,
+		"state":         event.State,
+		"game":          event.Game,
+		"last_event_ms": event.OccurredAtMS,
 	}
 
 	// A new player has no timestamp. Valid event timestamps are always positive.
