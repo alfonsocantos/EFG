@@ -31,8 +31,8 @@ type Config struct {
 func main() {
 	cfg := Config{
 		ShutdownTimeout: 30 * time.Second,
-		QueueSize:       100,
-		Workers:         4,
+		QueueSize:       1000,
+		Workers:         8,
 		Addr:            ":8080",
 		MongoURI:        "mongodb://localhost:27017/efg",
 	}
@@ -86,6 +86,8 @@ func main() {
 		log.Printf("Listening on %s", cfg.Addr)
 		serverResult <- server.ListenAndServe()
 	}()
+
+
 	select {
 	case <-signalCtx.Done():
 		stopSignals() // A second signal can force the process to exit.
