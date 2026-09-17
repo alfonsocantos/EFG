@@ -5,6 +5,50 @@ services:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  seed:
+    build: .
+    image: efg-demo
+    command: ["./seed", "-mongo-uri", "mongodb://mongo:27017/efg"]
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  presence:
+    stop_grace_period: 40s
+    build: .
+    image: efg-demo
+    command: ["./presence", "-mongouri", "mongodb://mongo:27017/efg"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  simulator:
+    build: .
+    image: efg-demo
+    command: ["./seed", "-mongo-uri", "mongodb://mongo:27017/efg", "-simulate", "-api", "http://presence:8080"]
+    depends_on:
+      presence:
+        condition: service_started
+
+  web:
+    build: .
+    image: efg-demo
+    command: ["./web", "-api", "http://presence:8080"]
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - ./cmd/web/www:/app/cmd/web/www:ro
+    depends_on:
+      presence:
+        condition: service_started
 
 volumes:
   mongo-data:

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"efg/api"
 	"efg/presence"
 
 	"github.com/fulldump/biff"
@@ -32,7 +31,7 @@ func TestInvalidStatus(t *testing.T) {
 			request := httptest.NewRequest(tc.method, "/me/status", strings.NewReader(tc.body))
 			request.Header.Set("X-Player-ID", tc.playerID)
 			response := httptest.NewRecorder()
-			api.New(nil).ServeHTTP(response, request)
+			newTestAPI(t, nil).ServeHTTP(response, request)
 			biff.AssertEqual(response.Code, tc.status)
 		})
 	}

@@ -1,0 +1,7 @@
+.git
+.idea
+.codex
+.agents
+bin
+dist
+config.json

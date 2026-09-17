@@ -15,7 +15,7 @@ import (
 )
 
 // New builds the API routes.
-func New(client *mongo.Client) *box.B {
+func New(client *mongo.Client, queue *presence.Queue) *box.B {
 	b := box.NewBox()
 	b.Use(handleErrors)
 	b.Use(func(next box.H) box.H {
@@ -28,10 +28,8 @@ func New(client *mongo.Client) *box.B {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 
-	b.Handle(http.MethodGet, "/health", func() map[string]string {
-		return map[string]string{"status": "ok"}
-	})
-	b.Handle(http.MethodPost, "/events", presence.Events)
+	b.Handle(http.MethodGet, "/health", queue.Health)
+	b.Handle(http.MethodPost, "/events", queue.Events)
 	b.Handle(http.MethodPut, "/me/status", presence.SetStatus)
 	b.Handle(http.MethodGet, "/me/status", presence.GetStatus)
 	b.Handle(http.MethodGet, "/me/friends/presence", presence.FriendsPresence)
@@ -47,6 +45,12 @@ func handleErrors(next box.H) box.H {
 
 		err := box.GetError(ctx)
 		if err == nil {
+			return
+		}
+
+		if errors.Is(err, presence.ErrQueueFull) || errors.Is(err, presence.ErrQueueStopped) {
+			box.GetResponse(ctx).Header().Set("Retry-After", "1")
+			http.Error(box.GetResponse(ctx), err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 

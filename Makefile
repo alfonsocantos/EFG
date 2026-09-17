@@ -2,18 +2,28 @@ GO ?= go
 ARGS ?=
 MONGO_TEST_URI ?= mongodb://localhost:27017
 
-.PHONY: run test build test-integration test-load
+.PHONY: run stop run-api seed test build test-integration test-load
 
 run:
+	docker compose up --build
+
+stop:
+	docker compose down
+
+run-api:
 	docker compose up -d --wait mongo
 	$(GO) run . $(ARGS)
+
+seed:
+	docker compose up -d --wait mongo
+	$(GO) run ./cmd/seed $(ARGS)
 
 test:
 	$(GO) test ./...
 
 test-integration:
 	docker compose up -d --wait mongo
-	MONGO_TEST_URI="$(MONGO_TEST_URI)" $(GO) test ./presence -run Mongo -count=1
+	MONGO_TEST_URI="$(MONGO_TEST_URI)" $(GO) test ./... -run Mongo -count=1
 
 test-load:
 	docker compose up -d --wait mongo

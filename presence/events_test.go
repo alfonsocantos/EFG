@@ -18,6 +18,8 @@ import (
 	"efg/api"
 	"efg/presence"
 
+	"github.com/fulldump/box"
+
 	"github.com/fulldump/biff"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -33,7 +35,7 @@ func TestInvalidEvents(t *testing.T) {
 	} {
 		t.Run(body, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			api.New(nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body)))
+			newTestAPI(t, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body)))
 			biff.AssertEqual(recorder.Code, http.StatusBadRequest)
 		})
 	}
@@ -41,18 +43,15 @@ func TestInvalidEvents(t *testing.T) {
 
 func TestEventsDatabaseError(t *testing.T) {
 	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := client.Disconnect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	biff.AssertNil(err)
+
+	err = client.Disconnect(context.Background())
+	biff.AssertNil(err)
+
 	recorder := httptest.NewRecorder()
 	body := `{"server_id":"s","events":[{"player_id":"p","state":"online","occurred_at_ms":1}]}`
-	api.New(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body)))
-	if recorder.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body)
-	}
+	newTestAPI(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body)))
+	biff.AssertEqual(recorder.Code, http.StatusInternalServerError)
 }
 
 // Integration tests use unique player IDs and remove only their own records.
@@ -62,6 +61,7 @@ func fixture(t testing.TB) (*httptest.Server, *mongo.Collection, string) {
 	if uri == "" {
 		t.Skip("Set MONGO_TEST_URI to run MongoDB integration tests and benchmarks")
 	}
+
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +87,7 @@ func fixture(t testing.TB) (*httptest.Server, *mongo.Collection, string) {
 			t.Error(err)
 		}
 	})
-	server := httptest.NewServer(api.New(client))
+	server := httptest.NewServer(newTestAPI(t, client))
 	server.Client().Timeout = 15 * time.Second
 	t.Cleanup(server.Close)
 	return server, players, prefix
@@ -271,4 +271,8 @@ func BenchmarkEvents(b *testing.B) {
 	}
 	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "batches/s")
 	b.ReportMetric(float64(b.N*10)/b.Elapsed().Seconds(), "events/s")
+}
+
+func newTestAPI(t testing.TB, client *mongo.Client) *box.B {
+	return api.New(client, presence.NewQueue(t.Context(), 100, 4, presence.Events))
 }

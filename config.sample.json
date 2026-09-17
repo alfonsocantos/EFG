@@ -1,4 +1,7 @@
 {
   "addr": ":8080",
-  "mongo_uri": "mongodb://localhost:27017/efg"
+  "mongo_uri": "mongodb://localhost:27017/efg",
+  "queue_size": 100,
+  "workers": 4,
+  "shutdown_timeout": "30s"
 }

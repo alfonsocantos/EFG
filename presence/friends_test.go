@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"efg/api"
 	"efg/presence"
 
 	"github.com/fulldump/biff"
@@ -22,7 +21,7 @@ func TestFriendsPresenceRequiresIdentity(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "/me/friends/presence", nil)
 		request.Header.Set("X-Player-ID", id)
 		response := httptest.NewRecorder()
-		api.New(nil).ServeHTTP(response, request)
+		newTestAPI(t, nil).ServeHTTP(response, request)
 		biff.AssertEqual(response.Code, http.StatusUnauthorized)
 	}
 }

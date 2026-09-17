@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "camera": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "appearance": {
+    "activeColor": "neutral"
+  },
+  "objects": [
+    {
+      "id": "title",
+      "type": "text",
+      "x": 620,
+      "y": 0,
+      "width": 1320,
+      "height": 70,
+      "text": "# Player Presence \u2014 System architecture",
+      "style": {
+        "color": "neutral"
+      }
+    },
+    {
+      "id": "mm1",
+      "type": "rectangle",
+      "x": 100,
+      "y": 150,
+      "width": 240,
+      "height": 90,
+      "text": "Matchmaking server 01\nPlayers / running matches",
+      "style": {
+        "color": "orange"
+      }
+    },
+    {
+      "id": "mm2",
+      "type": "rectangle",
+      "x": 100,
+      "y": 300,
+      "width": 240,
+      "height": 90,
+      "text": "Matchmaking server 02\nPlayers / running matches",
+      "style": {
+        "color": "orange"
+      }
+    },
+    {
+      "id": "mmn",
+      "type": "rectangle",
+      "x": 100,
+      "y": 450,
+      "width": 240,
+      "height": 90,
+      "text": "Matchmaking server N\nPlayers / running matches",
+      "style": {
+        "color": "orange"
+      }
+    },
+    {
+      "id": "presence",
+      "type": "rectangle",
+      "x": 640,
+      "y": 300,
+      "width": 360,
+      "height": 330,
+      "text": "**Presence service \u00b7 Go / Box**\n\nPOST /events\nBounded queue \u2192 workers \u2192 BulkWrite\n\nGET /me/friends/presence\nGET /me/status \u00b7 PUT /me/status\n\nGET /health\nQueue \u00b7 busy workers \u00b7 events/s",
+      "style": {
+        "color": "blue"
+      }
+    },
+    {
+      "id": "mongo",
+      "type": "database",
+      "x": 1140,
+      "y": 300,
+      "width": 250,
+      "height": 180,
+      "text": "**MongoDB**\nefg.players\n\nState \u00b7 game \u00b7 last_event_ms\nFriends \u00b7 offline_mode",
+      "style": {
+        "color": "green"
+      }
+    },
+    {
+      "id": "browser",
+      "type": "rectangle",
+      "x": 100,
+      "y": 770,
+      "width": 260,
+      "height": 130,
+      "text": "**Web app \u00b7 Browser**\nVue + Tailwind (local assets)\nPlayer ID textbox\nFriends + server load",
+      "style": {
+        "color": "cyan"
+      }
+    },
+    {
+      "id": "web",
+      "type": "rectangle",
+      "x": 640,
+      "y": 770,
+      "width": 350,
+      "height": 130,
+      "text": "**Go web server \u00b7 :8081**\ncmd/web/main.go\nServes cmd/web/www\n/api/* \u2192 presence service",
+      "style": {
+        "color": "cyan"
+      }
+    },
+    {
+      "id": "write-note",
+      "type": "text",
+      "x": 1130,
+      "y": 540,
+      "width": 280,
+      "height": 160,
+      "text": "**Write rules**\nOnly newer timestamps apply.\nSuccess after persistence.\nFull queue: 503 + Retry-After.\nClients retry the same batch.",
+      "style": {
+        "color": "neutral"
+      }
+    },
+    {
+      "id": "read-note",
+      "type": "text",
+      "x": 1130,
+      "y": 765,
+      "width": 280,
+      "height": 145,
+      "text": "**Live view**\nPoll friends + health every 1s.\nX-Player-ID identifies user.\nOffline mode hides presence\nand game from friends.",
+      "style": {
+        "color": "neutral"
+      }
+    },
+    {
+      "id": "events1",
+      "type": "connector",
+      "start": {
+        "objectId": "mm1",
+        "x": 100,
+        "y": 150
+      },
+      "end": {
+        "objectId": "presence",
+        "x": 640,
+        "y": 300
+      },
+      "arrow": true,
+      "text": "POST /events",
+      "style": {
+        "color": "orange"
+      }
+    },
+    {
+      "id": "events2",
+      "type": "connector",
+      "start": {
+        "objectId": "mm2",
+        "x": 100,
+        "y": 300
+      },
+      "end": {
+        "objectId": "presence",
+        "x": 640,
+        "y": 300
+      },
+      "arrow": true,
+      "text": "Player event batches",
+      "style": {
+        "color": "orange"
+      }
+    },
+    {
+      "id": "eventsn",
+      "type": "connector",
+      "start": {
+        "objectId": "mmn",
+        "x": 100,
+        "y": 450
+      },
+      "end": {
+        "objectId": "presence",
+        "x": 640,
+        "y": 300
+      },
+      "arrow": true,
+      "text": "POST /events",
+      "style": {
+        "color": "orange"
+      }
+    },
+    {
+      "id": "db",
+      "type": "connector",
+      "start": {
+        "objectId": "presence",
+        "x": 640,
+        "y": 300
+      },
+      "end": {
+        "objectId": "mongo",
+        "x": 1140,
+        "y": 300
+      },
+      "arrow": true,
+      "text": "Read / write",
+      "style": {
+        "color": "green"
+      }
+    },
+    {
+      "id": "browserweb",
+      "type": "connector",
+      "start": {
+        "objectId": "browser",
+        "x": 100,
+        "y": 770
+      },
+      "end": {
+        "objectId": "web",
+        "x": 640,
+        "y": 770
+      },
+      "arrow": true,
+      "text": "Static assets + /api/*",
+      "style": {
+        "color": "cyan"
+      }
+    },
+    {
+      "id": "webapi",
+      "type": "connector",
+      "start": {
+        "objectId": "web",
+        "x": 640,
+        "y": 770
+      },
+      "end": {
+        "objectId": "presence",
+        "x": 640,
+        "y": 300
+      },
+      "arrow": true,
+      "text": "HTTP proxy",
+      "style": {
+        "color": "cyan"
+      }
+    },
+    {
+      "id": "footer",
+      "type": "text",
+      "x": 610,
+      "y": 910,
+      "width": 1300,
+      "height": 50,
+      "text": "Demo load: 100,000 synthetic players + 8 demo players \u00b7 32 simulated Matchmaking clients",
+      "style": {
+        "color": "neutral"
+      }
+    }
+  ]
+}

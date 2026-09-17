@@ -20,19 +20,23 @@ type FriendPresence struct {
 }
 
 func FriendsPresence(ctx context.Context, r *http.Request) ([]FriendPresence, error) {
+
 	playerID := strings.TrimSpace(r.Header.Get("X-Player-ID"))
 	if playerID == "" {
 		return nil, ErrMissingPlayerID
 	}
+
 	players := mongoclient.GetMongoClient(ctx).Database("efg").Collection("players")
 	var player struct {
 		Friends []string `bson:"friends"`
 	}
+
 	err := players.FindOne(ctx, bson.M{"_id": playerID},
 		options.FindOne().SetProjection(bson.M{"friends": 1})).Decode(&player)
 	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		return nil, err
 	}
+
 	result := make([]FriendPresence, 0, len(player.Friends))
 	if len(player.Friends) == 0 {
 		return result, nil
@@ -45,6 +49,7 @@ func FriendsPresence(ctx context.Context, r *http.Request) ([]FriendPresence, er
 		return nil, err
 	}
 	defer cursor.Close(ctx)
+
 	var friends []struct {
 		ID          string `bson:"_id"`
 		State       string `bson:"state"`
@@ -54,6 +59,7 @@ func FriendsPresence(ctx context.Context, r *http.Request) ([]FriendPresence, er
 	if err := cursor.All(ctx, &friends); err != nil {
 		return nil, err
 	}
+
 	byID := make(map[string]FriendPresence, len(friends))
 	for _, friend := range friends {
 		state := visibleState(friend.State, friend.OfflineMode)
@@ -63,6 +69,7 @@ func FriendsPresence(ctx context.Context, r *http.Request) ([]FriendPresence, er
 		}
 		byID[friend.ID] = presence
 	}
+
 	// Preserve the friend list order; friends without presence appear offline.
 	for _, id := range player.Friends {
 		friend, exists := byID[id]
